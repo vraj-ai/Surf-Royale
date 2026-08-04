@@ -73,6 +73,76 @@ print("SLICE_GATE_OK")
 PY
 }
 
+verify_visual_foundation() {
+  run_tests visual-foundation
+
+  local evidence_dir="$ROOT/docs/evidence"
+  local result_path="$evidence_dir/m4-2026-07-20-forward-plus-foundation.json"
+  local screenshot_path="$evidence_dir/m4-2026-07-20-forward-plus-foundation.png"
+  local log_file
+  log_file="$(mktemp)"
+  rm -f "$screenshot_path"
+
+  "$GODOT_BIN" --path "$ROOT" -- \
+    --slice-benchmark=300 --profile=target \
+    --result=res://docs/evidence/m4-2026-07-20-forward-plus-foundation.json \
+    --screenshot=res://docs/evidence/m4-2026-07-20-forward-plus-foundation.png \
+    >"$log_file" 2>&1
+  cat "$log_file"
+
+  python3 - "$result_path" "$screenshot_path" "$log_file" <<'PY'
+import json
+import pathlib
+import re
+import sys
+
+result_path = pathlib.Path(sys.argv[1])
+screenshot_path = pathlib.Path(sys.argv[2])
+log = pathlib.Path(sys.argv[3]).read_text()
+evidence = json.loads(result_path.read_text())
+renderer = re.search(r"^(?P<driver>.+?) - Forward\+ - Using Device(?: #\d+)?: (?P<adapter>.+)$", log, re.MULTILINE)
+assert renderer, f"Target profile did not start on Forward+: {log}"
+assert evidence["profile"] == "target", evidence
+assert evidence["platform"] == "macOS", evidence
+assert evidence["architecture"] == "arm64", evidence
+assert evidence["duration_seconds"] >= 300.0, evidence
+assert evidence["screenshot_capture_seconds"] < evidence["warm_up_seconds"], evidence
+assert evidence["p95_frame_ms"] <= 16.7, evidence
+assert evidence["one_percent_low_frame_ms"] <= 25.0, evidence
+assert evidence["worst_non_loading_frame_ms"] <= 50.0, evidence
+assert evidence["memory_growth_bytes"] <= 67_108_864, evidence
+assert evidence["scene_node_count"] > 0, evidence
+assert screenshot_path.stat().st_size > 0, screenshot_path
+evidence["renderer"] = "Forward+"
+evidence["rendering_driver"] = renderer.group("driver")
+evidence["video_adapter"] = renderer.group("adapter")
+result_path.write_text(json.dumps(evidence, indent=2) + "\n")
+print("VISUAL_FOUNDATION_EVIDENCE_OK")
+PY
+
+  "$GODOT_BIN" --path "$ROOT" -- \
+    --visual-reload-smoke=3.0 --reload-count=3 --profile=target \
+    --reload-result=res://docs/evidence/m4-2026-07-20-forward-plus-reload-soak.json \
+    >>"$log_file" 2>&1
+  cat "$log_file"
+  python3 - "$evidence_dir/m4-2026-07-20-forward-plus-reload-soak.json" <<'PY'
+import json
+import pathlib
+import sys
+
+evidence = json.loads(pathlib.Path(sys.argv[1]).read_text())
+assert evidence["reload_count"] == 3, evidence
+assert evidence["stable_post_reload_scene_node_count"] is True, evidence
+assert evidence["stable_object_count"] is True, evidence
+assert evidence["memory_not_monotonically_growing"] is True, evidence
+assert evidence["bounded_cumulative_memory_growth"] is True, evidence
+assert evidence["benchmark_runs_passed"] is True, evidence
+assert evidence["passed"] is True, evidence
+print("VISUAL_RELOAD_SOAK_OK")
+PY
+  rm -f "$log_file"
+}
+
 verify_evidence_and_export() {
   python3 - "$ROOT" <<'PY'
 import json
@@ -218,6 +288,9 @@ case "$SUITE" in
     ;;
   slice)
     verify_slice
+    ;;
+  visual-foundation)
+    verify_visual_foundation
     ;;
   network)
     verify_network

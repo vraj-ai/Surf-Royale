@@ -53,6 +53,14 @@ godot --path . -- \
 
 The command exits nonzero if the run is shorter than five minutes, p95 frame time exceeds 16.7 ms, memory growth exceeds 64 MiB, or the evidence cannot meet the slice gate.
 
+## Forward+ visual foundation evidence
+
+```bash
+./scripts/verify.sh visual-foundation
+```
+
+This command runs the five-minute native M4 target-profile benchmark, verifies the startup log reports Forward+ rather than Compatibility, records renderer/driver/device and frame-stability metrics, captures a fixed frame, and executes three in-process Tutorial Cove reloads. It writes P0-001 evidence under `docs/evidence/m4-2026-07-20-forward-plus-*`.
+
 ## Clean-checkout verification
 
 ```bash

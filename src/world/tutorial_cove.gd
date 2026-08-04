@@ -1,14 +1,19 @@
 class_name TutorialCove
 extends Node3D
 
+signal benchmark_completed(evidence: Dictionary)
+
 const OceanTruthType = preload("res://src/ocean/ocean_truth.gd")
 const SurfControllerType = preload("res://src/surf/surf_controller.gd")
 const SurfInputType = preload("res://src/surf/surf_input.gd")
 const ProjectileType = preload("res://src/gameplay/sidearm_projectile.gd")
 const FrameMetricsType = preload("res://src/telemetry/frame_metrics.gd")
+const VisualProfileType = preload("res://src/visual/visual_profile.gd")
 
 const SET_PERIOD_SECONDS := 75.0
 const FIRE_COOLDOWN_SECONDS := 0.35
+const BENCHMARK_WARM_UP_SECONDS := 2.0
+const BENCHMARK_CAPTURE_TIME_SECONDS := 0.5
 const WATER_COLOR := Color(0.035, 0.42, 0.52, 1.0)
 const STORM_COLOR := Color(0.08, 0.18, 0.23, 1.0)
 const CUE_COLOR := Color(0.1, 0.78, 0.85, 1.0)
@@ -19,6 +24,8 @@ var benchmark_duration_seconds := -1.0
 var benchmark_result_path := ""
 var benchmark_screenshot_path := ""
 var benchmark_requires_frame_budget := false
+var benchmark_profile := VisualProfileType.TARGET
+var benchmark_exit_on_finish := true
 
 var _ocean := OceanTruthType.new(20260718)
 var _controller := SurfControllerType.new(_ocean)
@@ -43,6 +50,7 @@ var _wave_meshes: Array[MeshInstance3D] = []
 var _projectiles: Array[Dictionary] = []
 
 func _ready() -> void:
+	benchmark_profile = VisualProfileType.normalize(benchmark_profile)
 	_controller.position = Vector3(0.0, 0.0, -12.0)
 	_build_world()
 	_build_hud()
@@ -58,10 +66,12 @@ func _process(delta: float) -> void:
 	_elapsed += delta
 	if benchmark_duration_seconds > 0.0:
 		_benchmark_elapsed += delta
-		var screenshot_time := minf(8.0, benchmark_duration_seconds * 0.5)
+		var screenshot_time := minf(BENCHMARK_CAPTURE_TIME_SECONDS, benchmark_duration_seconds * 0.5)
 		if not _screenshot_saved and _benchmark_elapsed >= screenshot_time:
+			_screenshot_saved = true
 			_capture_screenshot()
-		if _benchmark_elapsed >= 2.0:
+		var frame_started_at := _benchmark_elapsed - delta
+		if FrameMetricsType.is_non_loading_interval(frame_started_at, BENCHMARK_WARM_UP_SECONDS):
 			_metrics.record(delta)
 		if _benchmark_elapsed >= benchmark_duration_seconds:
 			_finish_benchmark()
@@ -308,8 +318,16 @@ func _update_projectiles(delta: float) -> void:
 
 func _finish_benchmark() -> void:
 	_finished = true
+	_audio_player.stop()
+	for entry in _projectiles:
+		var visual: MeshInstance3D = entry.visual
+		if is_instance_valid(visual):
+			visual.queue_free()
+	_projectiles.clear()
 	_metrics.finish(OS.get_static_memory_usage())
 	var p95_ms: float = _metrics.p95_ms()
+	var one_percent_low_ms: float = _metrics.one_percent_low_frame_ms()
+	var worst_frame_ms: float = _metrics.worst_frame_ms()
 	var memory_growth: int = _metrics.memory_growth_bytes()
 	var enough_samples: bool = _metrics.sample_count() >= maxi(int((benchmark_duration_seconds - 2.0) * 30.0), 1)
 	var passed := enough_samples and memory_growth <= 67_108_864
@@ -317,6 +335,8 @@ func _finish_benchmark() -> void:
 		passed = (
 			passed
 			and p95_ms <= 16.7
+			and one_percent_low_ms <= 25.0
+			and worst_frame_ms <= 50.0
 			and benchmark_duration_seconds >= 300.0
 			and not benchmark_result_path.is_empty()
 		)
@@ -325,27 +345,39 @@ func _finish_benchmark() -> void:
 		"platform": OS.get_name(),
 		"architecture": Engine.get_architecture_name(),
 		"resolution": "1600x900",
+		"profile": benchmark_profile,
 		"duration_seconds": benchmark_duration_seconds,
 		"frame_samples": _metrics.sample_count(),
+		"warm_up_seconds": BENCHMARK_WARM_UP_SECONDS,
+		"screenshot_capture_seconds": BENCHMARK_CAPTURE_TIME_SECONDS,
 		"p95_frame_ms": p95_ms,
+		"one_percent_low_frame_ms": one_percent_low_ms,
+		"worst_non_loading_frame_ms": worst_frame_ms,
 		"memory_growth_bytes": memory_growth,
+		"scene_node_count": get_tree().get_node_count(),
 		"performance_budget_required": benchmark_requires_frame_budget,
 		"passed": passed,
 	}
 	if not _write_benchmark(evidence):
 		passed = false
 	print("SLICE_BENCHMARK_%s duration=%.1f p95_ms=%.3f memory_growth=%d" % ["OK" if passed else "FAILED", benchmark_duration_seconds, p95_ms, memory_growth])
-	get_tree().quit(0 if passed else 1)
+	benchmark_completed.emit(evidence)
+	if benchmark_exit_on_finish:
+		queue_free()
+		get_tree().call_deferred("quit", 0 if passed else 1)
 
-func _capture_screenshot() -> void:
-	_screenshot_saved = true
+func _capture_screenshot() -> bool:
 	if benchmark_screenshot_path.is_empty() or DisplayServer.get_name() == "headless":
-		return
+		return false
 	var absolute_path := ProjectSettings.globalize_path(benchmark_screenshot_path)
 	DirAccess.make_dir_recursive_absolute(absolute_path.get_base_dir())
-	var result := get_viewport().get_texture().get_image().save_png(absolute_path)
+	var image := get_viewport().get_texture().get_image()
+	var result := image.save_png(absolute_path)
+	image = null
 	if result != OK:
 		push_error("Could not write benchmark screenshot: %s" % absolute_path)
+		return false
+	return true
 
 func _write_benchmark(data: Dictionary) -> bool:
 	if benchmark_result_path.is_empty():
