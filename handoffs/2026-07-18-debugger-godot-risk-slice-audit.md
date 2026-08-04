@@ -7,9 +7,9 @@
 
 ## Personalized reviewer
 
-Created the idempotent repo reviewer definition at `.claude/agents/part3-surf-royale.md`, pinned to the Godot/GDScript scope, invariant docs, test globs, tracker, and global gate.
+Created the idempotent repo reviewer definition at `.claude/agents/debugger-surf-royale.md`, pinned to the Godot/GDScript scope, invariant docs, test globs, tracker, and global gate.
 
-The user explicitly prohibited launching subagents for this continuation. The personalized maker and the skill's independent fresh-eyes checker were therefore **not launched**. The audit was performed directly in the coordinating context. This satisfies the user's resource boundary but does not claim the independent maker ≠ checker separation normally required by `/part3`.
+The user explicitly prohibited launching subagents for this continuation. The personalized maker and the skill's independent fresh-eyes checker were therefore **not launched**. The audit was performed directly in the coordinating context. This satisfies the user's resource boundary but does not claim the independent maker ≠ checker separation normally required by `/debugger`.
 
 ## Four-net audit
 
@@ -37,7 +37,7 @@ The user explicitly prohibited launching subagents for this continuation. The pe
 
 ## Ticket trail
 
-- T007 local mirror: `tracker/technical-tickets/007-part3-network-authority-audit.md`
+- T007 local mirror: `tracker/technical-tickets/007-debugger-network-authority-audit.md`
 - GitHub issue: https://github.com/VrajGupta/Surf-Royale/issues/30
 - T007 is a native sub-issue of Wayfinder #21 and is blocked by T006.
 
@@ -60,11 +60,11 @@ size:   59,623,833 bytes
 sha256: c7dc3f3168767561a90638df4ed3296713158fbf0cf9645494bfa83bf59ddb88
 ```
 
-## Grade
+## Review
 
-**Direct audit grade: clean for the scoped risk-slice invariants.** No known blocking defect remains and the full gate is green.
+**Direct audit review: clean for the scoped risk-slice invariants.** No known blocking defect remains and the full gate is green.
 
-**Independence caveat:** no separate checker context was launched because the user explicitly prohibited subagents. This handoff does not misrepresent the direct grade as an independent fresh-eyes grade.
+**Independence caveat:** no separate checker context was launched because the user explicitly prohibited subagents. This handoff does not misrepresent the direct review as an independent fresh-eyes review.
 
 ## Follow-ups
 
