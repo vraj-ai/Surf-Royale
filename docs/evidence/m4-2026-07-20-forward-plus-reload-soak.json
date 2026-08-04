@@ -1,0 +1,28 @@
+{
+	"baseline_object_count": 1499,
+	"baseline_scene_node_count": 2,
+	"benchmark_runs_passed": true,
+	"bounded_cumulative_memory_growth": true,
+	"cleanup_memory_growth_bytes": 6397665,
+	"memory_not_monotonically_growing": true,
+	"passed": true,
+	"post_reload_memory_bytes": [
+		49152170,
+		49157354,
+		49159346
+	],
+	"post_reload_memory_drift_bytes": 7176,
+	"post_reload_object_counts": [
+		1513,
+		1513,
+		1513
+	],
+	"post_reload_scene_node_counts": [
+		2,
+		2,
+		2
+	],
+	"reload_count": 3,
+	"stable_object_count": true,
+	"stable_post_reload_scene_node_count": true
+}

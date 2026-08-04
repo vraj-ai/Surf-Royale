@@ -8,6 +8,9 @@ const NetworkInputValidator = preload("res://src/network/network_input_validator
 const CorrectionTracker = preload("res://src/network/correction_tracker.gd")
 const SidearmProjectile = preload("res://src/gameplay/sidearm_projectile.gd")
 const FrameMetrics = preload("res://src/telemetry/frame_metrics.gd")
+const VisualProfile = preload("res://src/visual/visual_profile.gd")
+const VisualReloadMetrics = preload("res://src/visual/visual_reload_metrics.gd")
+const TutorialCove = preload("res://src/world/tutorial_cove.gd")
 
 var _failures: Array[String] = []
 
@@ -49,6 +52,15 @@ func _initialize() -> void:
 		_test_sidearm_projectile_rejects_non_finite_state()
 		_test_frame_metrics_report_nearest_rank_p95()
 		_test_frame_metrics_report_non_negative_memory_growth()
+
+	if suite in ["visual-foundation", "all"]:
+		_test_visual_profile_normalizes_unknown_profile_to_target()
+		_test_visual_profiles_expose_only_presentation_settings()
+		_test_frame_metrics_report_one_percent_low_and_worst_frame()
+		_test_benchmark_capture_completes_during_warm_up()
+		_test_non_loading_frame_metrics_exclude_warm_up_boundary_interval()
+		_test_server_route_defers_tutorial_cove_loading()
+		_test_visual_reload_metrics_reject_monotonic_cleanup_growth()
 
 	call_deferred("_finish")
 
@@ -264,6 +276,56 @@ func _test_frame_metrics_report_non_negative_memory_growth() -> void:
 	var metrics := FrameMetrics.new(2_000)
 	metrics.finish(1_500)
 	_expect_equal(metrics.memory_growth_bytes(), 0, "released memory cannot report negative growth")
+
+func _test_visual_profile_normalizes_unknown_profile_to_target() -> void:
+	_expect_equal(VisualProfile.normalize("unsupported"), VisualProfile.TARGET, "unknown quality profile falls back to target")
+	_expect_equal(VisualProfile.normalize("CAPTURE"), VisualProfile.CAPTURE, "quality profile selection is case-insensitive")
+
+func _test_visual_profiles_expose_only_presentation_settings() -> void:
+	var settings := VisualProfile.settings(VisualProfile.PERFORMANCE)
+	_expect_equal(settings.profile, VisualProfile.PERFORMANCE, "performance profile identifies itself")
+	_expect_true(not settings.water_detail and not settings.reflections, "performance profile can independently disable visual effects")
+	_expect_true(not settings.has("ocean_seed") and not settings.has("physics_ticks_per_second"), "quality profile has no gameplay authority settings")
+
+func _test_frame_metrics_report_one_percent_low_and_worst_frame() -> void:
+	var metrics := FrameMetrics.new(0)
+	metrics.record(0.010)
+	metrics.record(0.016)
+	metrics.record(0.040)
+	_expect_near(metrics.one_percent_low_frame_ms(), 40.0, 0.001, "one percent low frame time uses nearest-rank p99")
+	_expect_near(metrics.worst_frame_ms(), 40.0, 0.001, "worst frame time is recorded")
+
+func _test_benchmark_capture_completes_during_warm_up() -> void:
+	_expect_true(TutorialCove.BENCHMARK_CAPTURE_TIME_SECONDS < TutorialCove.BENCHMARK_WARM_UP_SECONDS, "benchmark capture completes before non-loading frame metrics begin")
+
+func _test_visual_reload_metrics_reject_monotonic_cleanup_growth() -> void:
+	var stable := VisualReloadMetrics.new(1_000, 10, 20)
+	for post_memory in [1_100, 1_100, 1_100]:
+		stable.record({"passed": true}, post_memory, 10, 20)
+	var stable_evidence := stable.evidence()
+	_expect_true(stable_evidence.passed, "reload evidence accepts stable cleanup measurements")
+
+	var growing_object_count := VisualReloadMetrics.new(1_000, 10, 20)
+	for object_count in [21, 22, 23]:
+		growing_object_count.record({"passed": true}, 1_100, 10, object_count)
+	_expect_true(not growing_object_count.evidence().passed, "reload evidence rejects monotonically growing object counts")
+
+	var growing := VisualReloadMetrics.new(1_000, 10, 20)
+	for post_memory in [1_100, 132_200, 263_300]:
+		growing.record({"passed": true}, post_memory, 10, 20)
+	var growing_evidence := growing.evidence()
+	_expect_true(not growing_evidence.passed, "reload evidence rejects monotonically growing cleanup memory")
+
+func _test_non_loading_frame_metrics_exclude_warm_up_boundary_interval() -> void:
+	_expect_true(not FrameMetrics.is_non_loading_interval(0.5, 2.0), "capture stall crossing the warm-up boundary is excluded")
+	_expect_true(FrameMetrics.is_non_loading_interval(2.0, 2.0), "post-warm-up frame interval remains measured")
+
+func _test_server_route_defers_tutorial_cove_loading() -> void:
+	var main_source := FileAccess.get_file_as_string("res://src/app/main.gd")
+	_expect_true(not main_source.contains("preload(\"res://src/world/tutorial_cove.tscn\")"), "server startup does not preload the client cove scene")
+	_expect_true(not main_source.contains("preload(\"res://src/app/launch_screen.tscn\")"), "server startup does not preload the client launch screen")
+	_expect_true(main_source.contains("ResourceLoader.load(TUTORIAL_COVE_SCENE_PATH"), "client cove scene loads only through the launch path")
+	_expect_true(main_source.contains("ResourceLoader.load(LAUNCH_SCREEN_SCENE_PATH"), "client launch screen loads only after server dispatch")
 
 func _find_catchable_time(ocean: Variant, position: Vector2) -> float:
 	for index in 800:

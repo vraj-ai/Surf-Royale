@@ -7,6 +7,14 @@
 - Workload: rendered Godot 4.7.1 compatibility renderer, 1600×900 internal resolution, 300 seconds
 - Result: 17,876 measured frames, 16.667 ms p95, 2,043,306 bytes memory growth, passed
 
+## P0-001 Forward+ foundation — M4 MacBook Air
+
+- Benchmark: [`m4-2026-07-20-forward-plus-foundation.json`](m4-2026-07-20-forward-plus-foundation.json)
+- Render capture: [`m4-2026-07-20-forward-plus-foundation.png`](m4-2026-07-20-forward-plus-foundation.png)
+- Reload soak: [`m4-2026-07-20-forward-plus-reload-soak.json`](m4-2026-07-20-forward-plus-reload-soak.json)
+- Workload: Godot 4.7.1 Forward+ through Metal 4.0 on Apple M4, target profile, 1600×900, 300 seconds.
+- Result: 17,881 measured non-loading frames; the fixed screenshot captured at 0.5 seconds during the 2.0-second warm-up; 16.667 ms p95, 1% low, and worst non-loading frame; 4,030,437 bytes memory growth. The three-reload cleanup soak held two post-cleanup scene nodes and a stable 1,513-object count; its 7,176-byte post-cleanup memory drift is recorded in the reload evidence.
+
 ## macOS artifact
 
 `./scripts/verify.sh all` produced the unsigned local-review artifact at:
